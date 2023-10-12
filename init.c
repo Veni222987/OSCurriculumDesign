@@ -43,7 +43,7 @@ struct data_block
 int main()
 {
     FILE *fp = NULL;
-    fp = fopen("./vdisk", "r+"); // 打开文件
+    fp = fopen("/home/veni/Desktop/OSCD/VeniFS/vdisk", "r+"); // 打开文件
     if (fp == NULL)
     {
         printf("打开文件失败，文件不存在\n");
