@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "stdio.h": "c",
+        "fuse.h": "c",
+        "fuse_common.h": "c",
+        "libfuse_config.h": "c"
+    }
+}

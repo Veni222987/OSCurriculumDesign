@@ -4,7 +4,7 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/home/veni/Desktop/OSCD/libfuse/include"
+                "/usr/local/include/fuse3/"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
