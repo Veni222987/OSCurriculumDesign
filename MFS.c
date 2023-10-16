@@ -1,3 +1,5 @@
+#define FUSE_USE_VERSION 31
+
 #include <fuse.h>
 #include <time.h>
 #include <stdio.h>
@@ -11,23 +13,35 @@
 #include <assert.h>
 #include <unistd.h>
 #include <malloc.h>
-#define FS_BLOCK_SIZE 512
+
+#define FS_BLOCK_SIZE 1024
 #define SUPER_BLOCK 1
-#define BITMAP_BLOCK 1280
-#define ROOT_DIR_BLOCK 1
-#define MAX_DATA_IN_BLOCK 504
+#define BITMAP_BLOCK 14
+#define ROOT_DIR_BLOCK 15
+#define MAX_DATA_IN_BLOCK 1016
 #define MAX_DIR_IN_BLOCK 8
-#define MAX_FILENAME 8
-#define MAX_EXTENSION 3
+#define MAX_FILENAME 24
+#define MAX_EXTENSION 8
+
 long TOTAL_BLOCK_NUM;
-// 超级块中记录的，大小为 24 bytes（3个long），占用1块磁盘块
+// 超级块中记录的，大小为 24 bytes（3个long）
 struct super_block
 {
 	long fs_size;	// size of file system, in blocks（以块为单位）
 	long first_blk; // first block of root directory（根目录的起始块位置，以块为单位）
 	long bitmap;	// size of bitmap, in blocks（以块为单位）
 };
-// 记录文件信息的数据结构,统一存放在目录文件里面，也就是说目录文件里面存的全部都是这个结构，大小为 64 bytes，占用1块磁盘块
+
+// inode结构体，大小为 32 bytes
+struct inode
+{
+	int flag;			 // 文件类型 0: unused; 1: file; 2: directory
+	size_t fsize;		 // 文件大小
+	long direct_block;	 // 直接块号
+	long indirect_block; // 间接块号
+};
+
+// 记录文件信息的数据结构,统一存放在目录文件里面，也就是说目录文件里面存的全部都是这个结构，大小为 64 bytes
 struct file_directory
 {
 	char fname[MAX_FILENAME + 1]; // 文件名 (plus space for nul)
@@ -36,7 +50,7 @@ struct file_directory
 	long nStartBlock;			  // 目录开始块位置（where the first block is on disk）
 	int flag;					  // indicate type of file. 0:for unused; 1:for file; 2:for directory
 };
-// 文件内容存放用到的数据结构，大小为 512 bytes，占用1块磁盘块
+// 文件内容存放用到的数据结构，大小为 512 bytes
 struct data_block
 {
 	size_t size;				  // 文件使用了这个块里面的多少Bytes
@@ -44,7 +58,7 @@ struct data_block
 	char data[MAX_DATA_IN_BLOCK]; // And all the rest of the space in the block can be used for actual data storage.
 };
 // 我的5M磁盘文件为:"/home/linyueq/homework/diskimg"
-char *disk_path = "/home/linyueq/homework/MFS/diskimg";
+char *disk_path = "./vdisk";
 // 辅助函数声明
 void read_cpy_file_dir(struct file_directory *a, struct file_directory *b);
 int read_cpy_data_block(long blk_no, struct data_block *data_blk);
@@ -63,15 +77,7 @@ int get_fd_to_attr(const char *path, struct file_directory *attr);
 int create_file_dir(const char *path, int flag);
 int remove_file_dir(const char *path, int flag);
 /***************************************************************************************************************************/
-/*
- * Command line options(定义命令行选项)
- *
- * We can't set default values for the char* fields here because
- * fuse_opt_parse would attempt to free() them when the user specifies
- * different values on the command line.
- *
- * 我们不能在这里设置 char* 字段的默认值，因为当用户在命令行上指定不同的值时，fuse-opt-parse将尝试 free() 字段
- */
+
 /*
 static struct options {
 	const char *filename;
@@ -91,8 +97,7 @@ static const struct fuse_opt option_spec[] = {
 };*/
 /***************************************************************************************************************************/
 // 下面是一些读写文件的辅助函数：
-// 该函数为读取并复制file_directory结构的内容，因为文件系统所有对文件的操作都需要先从文件所在目录
-// 读取file_directory信息,然后才能找到文件在磁盘的位置，后者的数据复制给前者
+// 该函数为读取并复制file_directory结构的内容，因为文件系统所有对文件的操作都需要先从文件所在目录读取file_directory信息,然后才能找到文件在磁盘的位置，后者的数据复制给前者
 void read_cpy_file_dir(struct file_directory *a, struct file_directory *b)
 {
 	// 读出属性
@@ -1016,13 +1021,13 @@ static int MFS_getattr(const char *path, struct stat *stbuf, struct fuse_file_in
 	if (attr->flag == 2)
 	{ // 从path判断这个文件是		一个目录	还是	一般文件
 		printf("MFS_getattr：这个file_directory是一个目录\n\n");
-		stbuf->st_mode = S_IFDIR | 0666; // 设置成目录,S_IFDIR和0666（8进制的文件权限掩码），这里进行或运算
-										 // stbuf->st_nlink = 2;//st_nlink是连到该文件的硬连接数目,即一个文件的一个或多个文件名。说白点，所谓链接无非是把文件名和计算机文件系统使用的节点号链接起来。因此我们可以用多个文件名与同一个文件进行链接，这些文件名可以在同一目录或不同目录。
+		stbuf->st_mode = 0666; // 设置成目录,S_IFDIR和0666（8进制的文件权限掩码），这里进行或运算
+							   // stbuf->st_nlink = 2;//st_nlink是连到该文件的硬连接数目,即一个文件的一个或多个文件名。说白点，所谓链接无非是把文件名和计算机文件系统使用的节点号链接起来。因此我们可以用多个文件名与同一个文件进行链接，这些文件名可以在同一目录或不同目录。
 	}
 	else if (attr->flag == 1)
 	{
 		printf("MFS_getattr：这个file_directory是一个文件\n\n");
-		stbuf->st_mode = S_IFREG | 0666; // 该文件是	一般文件
+		stbuf->st_mode = 0666; // 该文件是	一般文件
 		stbuf->st_size = attr->fsize;
 		// stbuf->st_nlink = 1;
 	}

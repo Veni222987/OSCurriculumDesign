@@ -18,7 +18,7 @@
 #define MAX_FILENAME 24        // 文件名的最大长度（不包括扩展名）
 #define MAX_EXTENSION 8        // 扩展名的最大长度
 
-// 超级块中记录的，大小为 32 bytes（4个long），占用1块磁盘块
+// 超级块中记录的，大小为 32 bytes（4个long）
 struct super_block
 {
     long fs_size;        // 文件系统大小（以块为单位）
@@ -27,7 +27,7 @@ struct super_block
     long root_dir_start; // 根目录起始块位置
 };
 
-// inode结构体，大小为 32 bytes，占用1块磁盘块
+// inode结构体，大小为 32 bytes
 struct inode
 {
     int flag;            // 文件类型 0: unused; 1: file; 2: directory
@@ -36,7 +36,7 @@ struct inode
     long indirect_block; // 间接块号
 };
 
-// 文件内容存放用到的数据结构，大小为 1024 bytes，占用1块磁盘块
+// 文件内容存放用到的数据结构，大小为 1024 bytes
 struct data_block
 {
     size_t size;                  // 文件的数据部分使用了这个块里面的多少Bytes
